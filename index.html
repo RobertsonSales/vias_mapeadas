@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatorio - Operação Barricada Zero</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; color: #1e293b; line-height: 1.5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        .header { text-align: center; border-bottom: 3px solid #007bff; padding-bottom: 1.5rem; margin-bottom: 2rem; background: linear-gradient(to bottom, #007bff, #0056b3); color: white; border-radius: 0.5rem; padding: 1.5rem; }
+        .header h1 { font-size: 2rem; color: #ffffff; margin-bottom: 0.5rem; }
+        .header h2 { font-size: 1.25rem; color: #e6f7ff; font-weight: 400; }
+        .header .date { font-size: 0.875rem; color: #bfdbfe; margin-top: 0.5rem; }
+        .toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; margin-bottom: 2rem; padding: 1rem; background: #f1f5f9; border-radius: 0.5rem; }
+        .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; border: none; font-size: 0.875rem; transition: all 0.2s; }
+        .btn-primary { background-color: #2563eb; color: white; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-secondary { background-color: #059669; color: white; }
+        .btn-secondary:hover { background-color: #047857; }
+        .btn svg { width: 1rem; height: 1rem; }
+        .file-input-wrapper { position: relative; display: inline-flex; align-items: center; }
+        .file-input { position: absolute; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { padding: 1.5rem; border-radius: 0.5rem; text-align: center; }
+        .stat-card.blue { background-color: #dbeafe; }
+        .stat-card.green { background-color: #d1fae5; }
+        .stat-card.amber { background-color: #fef3c7; }
+        .stat-card.violet { background-color: #ede9fe; }
+        .stat-card .value { font-size: 2rem; font-weight: 700; }
+        .stat-card.blue .value { color: #2563eb; }
+        .stat-card.green .value { color: #059669; }
+        .stat-card.amber .value { color: #d97706; }
+        .stat-card.violet .value { color: #7c3aed; }
+        .stat-card .label { font-size: 0.875rem; color: #64748b; margin-top: 0.25rem; }
+        .charts-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+        .chart-card { background: white; border-radius: 0.5rem; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .chart-card h4 { font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 0.25rem; }
+        .chart-card p { font-size: 0.75rem; color: #64748b; margin-bottom: 1rem; }
+        .chart-container { height: 280px; position: relative; }
+        .insights-card { background: linear-gradient(to right, rgba(59, 130, 246, 0.1), transparent); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 0.5rem; padding: 1.5rem; margin-bottom: 2rem; }
+        .insights-card h4 { color: #2563eb; font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+        .insights-card p { font-size: 0.875rem; color: #475569; margin-bottom: 0.5rem; }
+        .insights-card strong { color: #1e293b; }
+        .insights-card .highlight { color: #2563eb; font-weight: 600; }
+        .section { margin-bottom: 2rem; }
+        .section-title { font-size: 1.25rem; font-weight: 600; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+        .section-title.cpa { color: #2563eb; border-bottom-color: #3b82f6; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.875rem; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 0.5rem; overflow: hidden; }
+        th { background-color: #f1f5f9; padding: 0.75rem 1rem; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; }
+        th.right, td.right { text-align: right; }
+        td { padding: 0.5rem 1rem; border-bottom: 1px solid #f1f5f9; }
+        tr:hover { background-color: #f8fafc; }
+        .via-table { font-size: 0.75rem; }
+        .via-table td { padding: 0.375rem 0.75rem; }
+        .footer { text-align: center; font-size: 0.75rem; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 1.5rem; margin-top: 2rem; }
+        .info-msg { text-align: center; padding: 0.75rem; background: #dbeafe; color: #1e40af; border-radius: 0.5rem; margin-bottom: 1rem; font-size: 0.875rem; }
+        .filters-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; padding: 1rem; background: white; border-radius: 0.5rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .filter-group { display: flex; align-items: center; gap: 0.5rem; }
+        .filter-group label { font-size: 0.875rem; font-weight: 600; color: #475569; }
+        .filter-group select { padding: 0.5rem 2rem 0.5rem 0.75rem; border: 1px solid #e2e8f0; border-radius: 0.375rem; font-size: 0.875rem; background: white; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1rem; }
+        .filter-group select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+        .filter-count { font-size: 0.75rem; color: #64748b; margin-left: auto; }
+        .btn-clear { padding: 0.5rem 1rem; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 0.375rem; font-size: 0.75rem; color: #64748b; cursor: pointer; }
+        .btn-clear:hover { background: #e2e8f0; }
+        @media print { 
+            body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; } 
+            .container { max-width: 100%; padding: 0.5rem; } 
+            .toolbar { display: none !important; } 
+            .info-msg { display: none !important; }
+            .filters-bar { display: none !important; }
+            .section { page-break-inside: avoid; } 
+            .charts-grid { page-break-inside: avoid; }
+            table { box-shadow: none; } 
+            .chart-card { box-shadow: none; border: 1px solid #e2e8f0; }
+            .stat-card, .insights-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+        @page { size: landscape; margin: 1cm; }
+        @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .charts-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Operação Barricada Zero</h1>
+            <h2>Relatório do Mapeamento de Vias pelas CPA's e BPM's</h2>
+            <p class="date" id="report-date">Gerado conforme dados da planilha a ser importada pelo usuário</p>
+        </div>
+        <div class="toolbar">
+            <div class="file-input-wrapper">
+                <button class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                    Importar Planilha Excel
+                </button>
+                <input type="file" class="file-input" id="file-input" accept=".xlsx,.xls" onchange="handleFileImport(event)">
+            </div>
+            <button class="btn btn-primary" onclick="window.print()">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                Exportar PDF / Imprimir
+            </button>
+        </div>
+        <div id="info-container"><div class="info-msg">Importe a planilha Excel para visualizar o relatório.</div></div>
+        <div id="content-container"></div>
+        <div class="footer">Sistema de Mapeamento - Operação Barricada Zero | Policia Militar do Estado do Rio de Janeiro</div>
+    </div>
+    <script>
+        let currentData = [];
+        const COLORS = ["#3b82f6","#10b981","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#ec4899"];
+        const xlsxLoaded = typeof XLSX !== 'undefined';
+        const chartJsLoaded = typeof Chart !== 'undefined';
+        let barChart = null;
+        let pieChart = null;
+        let selectedCPA = '';
+        let selectedBPM = '';
+        
+        if (!xlsxLoaded) {
+            document.querySelector('.file-input-wrapper').style.display = 'none';
+        }
+        
+        function getFilteredData() {
+            return currentData.filter(function(v) {
+                if (selectedCPA && v.cpa !== selectedCPA) return false;
+                if (selectedBPM && v.bpm !== selectedBPM) return false;
+                return true;
+            });
+        }
+        
+        function updateFilters() {
+            const cpas = [...new Set(currentData.map(function(v) { return v.cpa; }))].sort();
+            const bpms = [...new Set(currentData.map(function(v) { return v.bpm; }))].sort();
+            
+            const cpaSelect = document.getElementById('cpa-filter');
+            const bpmSelect = document.getElementById('bpm-filter');
+            
+            if (cpaSelect && bpmSelect) {
+                cpaSelect.innerHTML = '<option value="">Todos os CPAs</option>' + cpas.map(function(c) { return '<option value="' + c + '"' + (selectedCPA === c ? ' selected' : '') + '>' + c + '</option>'; }).join('');
+                bpmSelect.innerHTML = '<option value="">Todos os Batalhões</option>' + bpms.map(function(b) { return '<option value="' + b + '"' + (selectedBPM === b ? ' selected' : '') + '>' + b + '</option>'; }).join('');
+            }
+            
+            const filtered = getFilteredData();
+            const countEl = document.getElementById('filter-count');
+            if (countEl) {
+                countEl.textContent = 'Exibindo ' + filtered.length + ' de ' + currentData.length + ' vias';
+            }
+        }
+        
+        function handleCPAChange(e) {
+            selectedCPA = e.target.value;
+            renderReport(getFilteredData());
+            updateFilters();
+        }
+        
+        function handleBPMChange(e) {
+            selectedBPM = e.target.value;
+            renderReport(getFilteredData());
+            updateFilters();
+        }
+        
+        function clearFilters() {
+            selectedCPA = '';
+            selectedBPM = '';
+            renderReport(currentData);
+            updateFilters();
+        }
+        
+        const mappings = [
+            { startCol: 0, cpa: "CPA ALFA", bpm: "16 BPM", municipio: "Rio de Janeiro" },
+            { startCol: 3, cpa: "CPA BRAVO", bpm: "41 BPM / 18 BPM", municipio: "Rio de Janeiro" },
+            { startCol: 6, cpa: "CPA CHARLIE", bpm: "15 BPM", municipio: "Baixada Fluminense" },
+            { startCol: 9, cpa: "CPA DELTA", bpm: "20 BPM", municipio: "Baixada Fluminense" },
+            { startCol: 12, cpa: "CPA ECHO", bpm: "24 BPM", municipio: "Baixada Fluminense" },
+            { startCol: 15, cpa: "CPA FOX", bpm: "7 BPM / 35 BPM", municipio: "Niteroi/Sao Goncalo" },
+            { startCol: 18, cpa: "CPA GOLF", bpm: "21 BPM", municipio: "Baixada Fluminense" },
+        ];
+        
+        function cleanNumber(val) {
+            if (val === null || val === undefined || val === '' || val === 'x' || val === '—') return 0;
+            if (typeof val === 'number') return val;
+            const s = String(val).replace(/[^\d.,-]/g, '').replace(',', '.');
+            const num = parseFloat(s);
+            return isNaN(num) ? 0 : num;
+        }
+        
+        function isValidViaName(name, linkValue) {
+            if (!name || typeof name !== 'string') return false;
+            const trimmed = name.trim();
+            if (trimmed === '') return false;
+            const upper = trimmed.toUpperCase();
+            const exactInvalid = ['ALFA', 'ALPHA', 'BRAVO', 'CHARLIE', 'DELTA', 'ECHO', 'GOLF',
+                'VIA', 'VIAS', 'LOGRADOURO', 'LOGRADOUROS', 'EXTENSAO', 'LINK', 'MAPS', 'GOOGLE MAPS', 'MAPA', 'MAPAS',
+                'COMANDANTE', 'CMT', 'SUBCOMANDANTE', 'SUBCMT', 'TOTAL', 'SUBTOTAL', 'SOMA',
+                'UNIDADE', 'REGIAO', 'AREA', 'BPM', 'CPA'];
+            if (exactInvalid.includes(upper)) return false;
+            if (/^CPA\s+(ALFA|ALPHA|BRAVO|CHARLIE|DELTA|ECHO|FOX|GOLF)/i.test(upper)) return false;
+            if (/^\d+[º°]?\s*BPM/i.test(upper)) return false;
+            if (/^OPERAÇÃO|^BARRICADA\s*ZERO|^MAPEAMENTO/i.test(upper)) return false;
+            if (trimmed.length < 3) return false;
+            if (/^\d+$/.test(trimmed)) return false;
+            const hasLink = typeof linkValue === 'string' && (linkValue.includes('google.com/maps') || linkValue.includes('goo.gl') || linkValue.startsWith('http'));
+            const isCommander = /^(CEL|TEN\s*CEL|TC|MAJ|CAP|TEN|SUB\s*TEN|SGT|CB|SD|ASP)[\.º°]?\s+(PM|QOPM|BPM)/i.test(upper);
+            if (isCommander && !hasLink) return false;
+            if (/\sPM\s+(RR\s+)?[A-Z]/i.test(upper) && !hasLink) return false;
+            return true;
+        }
+        
+        function parseExcel(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    let sheetName = 'VIAS';
+                    if (!workbook.SheetNames.includes('VIAS')) {
+                        sheetName = workbook.SheetNames[0];
+                    }
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const parsedVias = [];
+                    for (let i = 1; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        if (!row || !Array.isArray(row) || row.length === 0) continue;
+                        mappings.forEach(function(map) {
+                            const viaName = row[map.startCol];
+                            const link = row[map.startCol + 1];
+                            const ext = row[map.startCol + 2];
+                            if (isValidViaName(viaName, link)) {
+                                const extensionVal = cleanNumber(ext);
+                                const linkStr = typeof link === 'string' && link.startsWith('http') ? link : undefined;
+                                parsedVias.push({
+                                    cpa: map.cpa,
+                                    bpm: map.bpm,
+                                    municipio: map.municipio,
+                                    via: String(viaName).trim(),
+                                    link: linkStr,
+                                    extensao: extensionVal,
+                                    bairro: ""
+                                });
+                            }
+                        });
+                    }
+                    resolve({ vias: parsedVias, sheet: sheetName });
+                };
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        function calculateStats(vias) {
+            const totalVias = vias.length;
+            const totalExtension = vias.reduce(function(s, v) { return s + (v.extensao || 0); }, 0);
+            const cpas = new Set(vias.map(function(v) { return v.cpa; }));
+            const bpms = new Set(vias.map(function(v) { return v.bpm; }));
+            const viasByCPA = {};
+            vias.forEach(function(v) {
+                if (!viasByCPA[v.cpa]) viasByCPA[v.cpa] = [];
+                viasByCPA[v.cpa].push(v);
+            });
+            const bpmMap = {};
+            vias.forEach(function(v) {
+                if (!bpmMap[v.bpm]) bpmMap[v.bpm] = { count: 0, extension: 0 };
+                bpmMap[v.bpm].count++;
+                bpmMap[v.bpm].extension += (v.extensao || 0);
+            });
+            const bpmExtensions = Object.keys(bpmMap).map(function(k) {
+                return { bpm: k, count: bpmMap[k].count, extension: bpmMap[k].extension };
+            }).sort(function(a, b) { return b.extension - a.extension; });
+            return {
+                totalVias: totalVias,
+                totalExtensionKm: (totalExtension / 1000).toFixed(2),
+                totalCPAs: cpas.size,
+                totalBPMs: bpms.size,
+                viasByCPA: viasByCPA,
+                bpmExtensions: bpmExtensions
+            };
+        }
+        
+        function renderReport(vias) {
+            const stats = calculateStats(vias);
+            
+            const cpaData = Object.keys(stats.viasByCPA).sort().map(function(cpa) {
+                const viasArr = stats.viasByCPA[cpa];
+                const ext = viasArr.reduce(function(s, v) { return s + (v.extensao || 0); }, 0);
+                return { name: cpa.replace('CPA ', ''), value: ext };
+            });
+            const topCPA = cpaData.reduce(function(a, b) { return a.value > b.value ? a : b; }, { name: '', value: 0 });
+            const avgExtension = stats.totalVias > 0 ? Math.round((parseFloat(stats.totalExtensionKm) * 1000) / stats.totalVias) : 0;
+            
+            let cpaSummaryRows = '';
+            Object.keys(stats.viasByCPA).sort().forEach(function(cpa) {
+                const viasArr = stats.viasByCPA[cpa];
+                const ext = viasArr.reduce(function(s, v) { return s + (v.extensao || 0); }, 0);
+                const avg = viasArr.length > 0 ? Math.round(ext / viasArr.length) : 0;
+                cpaSummaryRows += '<tr><td><strong>' + cpa + '</strong></td><td class="right">' + viasArr.length + '</td><td class="right">' + (ext / 1000).toFixed(2) + '</td><td class="right">' + avg + '</td></tr>';
+            });
+            let bpmSummaryRows = '';
+            stats.bpmExtensions.forEach(function(item) {
+                bpmSummaryRows += '<tr><td><strong>' + item.bpm + '</strong></td><td class="right">' + item.count + '</td><td class="right">' + (item.extension / 1000).toFixed(2) + '</td></tr>';
+            });
+            let viaSections = '';
+            Object.keys(stats.viasByCPA).sort().forEach(function(cpa) {
+                const viasArr = stats.viasByCPA[cpa];
+                let viaRows = '';
+                viasArr.forEach(function(via) {
+                    viaRows += '<tr><td>' + via.via + '</td><td>' + via.bpm + '</td><td>' + via.municipio + '</td><td class="right">' + (via.extensao ? via.extensao.toLocaleString('pt-BR') : '-') + '</td></tr>';
+                });
+                viaSections += '<div class="section"><h3 class="section-title cpa">' + cpa + ' (' + viasArr.length + ' vias)</h3><table class="via-table"><thead><tr><th style="width:40%">Via / Logradouro</th><th style="width:20%">Batalhão</th><th style="width:25%">Municipio</th><th class="right" style="width:15%">Extensao (m)</th></tr></thead><tbody>' + viaRows + '</tbody></table></div>';
+            });
+            
+            let chartsHtml = '';
+            if (chartJsLoaded) {
+                chartsHtml = '<div class="charts-grid">' +
+                    '<div class="chart-card"><h4>Extensao por CPA (metros)</h4><p>Comparativo de volume mapeado por Comando</p><div class="chart-container"><canvas id="barChart"></canvas></div></div>' +
+                    '<div class="chart-card"><h4>Distribuicao por BPM</h4><p>Proporcao de vias mapeadas por Batalhão</p><div class="chart-container"><canvas id="pieChart"></canvas></div></div>' +
+                    '</div>';
+            }
+            
+            const insightsHtml = '<div class="insights-card">' +
+                '<h4><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg> Insights Operacionais</h4>' +
+                '<p>O <strong>CPA ' + topCPA.name + '</strong> lidera o mapeamento com <span class="highlight">' + (topCPA.value / 1000).toFixed(2) + ' km</span> de vias registradas.</p>' +
+                '<p>Média de extensao por via e de aproximadamente <strong>' + avgExtension + ' metros</strong>.</p>' +
+                '<p>Existem registros distribuídos em <strong>' + stats.totalBPMs + ' batalhões</strong> diferentes, cobrindo areas criticas da operação.</p>' +
+                '</div>';
+            
+            const filtersHtml = '<div class="filters-bar">' +
+                '<div class="filter-group"><label>CPA:</label><select id="cpa-filter" onchange="handleCPAChange(event)"><option value="">Todos os CPAs</option></select></div>' +
+                '<div class="filter-group"><label>Batalhão:</label><select id="bpm-filter" onchange="handleBPMChange(event)"><option value="">Todos os Batalhões</option></select></div>' +
+                '<button class="btn-clear" onclick="clearFilters()">Limpar Filtros</button>' +
+                '<span class="filter-count" id="filter-count"></span>' +
+                '</div>';
+            
+            let html = filtersHtml +
+                '<div class="stats-grid">' +
+                '<div class="stat-card blue"><div class="value">' + stats.totalVias.toLocaleString('pt-BR') + '</div><div class="label">Total de Vias</div></div>' +
+                '<div class="stat-card green"><div class="value">' + stats.totalExtensionKm + ' km</div><div class="label">Extensao Mapeada</div></div>' +
+                '<div class="stat-card amber"><div class="value">' + stats.totalCPAs + '</div><div class="label">CPAs Envolvidos</div></div>' +
+                '<div class="stat-card violet"><div class="value">' + stats.totalBPMs + '</div><div class="label">Batalhões (BPMs)</div></div>' +
+                '</div>' +
+                chartsHtml +
+                insightsHtml +
+                '<div class="section"><h3 class="section-title">Resumo por CPA</h3><table><thead><tr><th>CPA</th><th class="right">Vias</th><th class="right">Extensao (km)</th><th class="right">Media (m)</th></tr></thead><tbody>' + cpaSummaryRows + '</tbody></table></div>' +
+                '<div class="section"><h3 class="section-title">Resumo por Batalhão (BPM)</h3><table><thead><tr><th>Batalhão</th><th class="right">Vias</th><th class="right">Extensao (km)</th></tr></thead><tbody>' + bpmSummaryRows + '</tbody></table></div>' +
+                viaSections;
+            document.getElementById('content-container').innerHTML = html;
+            
+            if (chartJsLoaded) {
+                if (barChart) barChart.destroy();
+                if (pieChart) pieChart.destroy();
+                
+                const barCtx = document.getElementById('barChart').getContext('2d');
+                barChart = new Chart(barCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: cpaData.map(function(d) { return d.name; }),
+                        datasets: [{
+                            data: cpaData.map(function(d) { return d.value; }),
+                            backgroundColor: COLORS,
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { callback: function(v) { return (v/1000).toFixed(0) + 'k'; } } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+                
+                const pieCtx = document.getElementById('pieChart').getContext('2d');
+                pieChart = new Chart(pieCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: stats.bpmExtensions.map(function(d) { return d.bpm; }),
+                        datasets: [{
+                            data: stats.bpmExtensions.map(function(d) { return d.count; }),
+                            backgroundColor: COLORS
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }
+                    }
+                });
+            }
+        }
+        
+        function showInfo(msg) {
+            document.getElementById('info-container').innerHTML = '<div class="info-msg">' + msg + '</div>';
+        }
+        
+        function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            showInfo('Processando planilha...');
+            parseExcel(file).then(function(result) {
+                if (result.vias.length > 0) {
+                    currentData = result.vias;
+                    selectedCPA = '';
+                    selectedBPM = '';
+                    showInfo('Planilha importada com sucesso! ' + result.vias.length + ' vias encontradas na aba "' + result.sheet + '".');
+                    document.getElementById('report-date').textContent = 'Atualizado em: ' + new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    renderReport(currentData);
+                    updateFilters();
+                } else {
+                    showInfo('Nenhum registro valido encontrado. Verifique a estrutura da planilha.');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
