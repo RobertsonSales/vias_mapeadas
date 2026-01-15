@@ -111,6 +111,7 @@
     </div>
     <script>
         let currentData = [];
+        let globalBPMs = new Set();
         const COLORS = ["#3b82f6","#10b981","#f59e0b","#8b5cf6","#ef4444","#06b6d4","#ec4899"];
         const xlsxLoaded = typeof XLSX !== 'undefined';
         const chartJsLoaded = typeof Chart !== 'undefined';
@@ -126,21 +127,40 @@
         function getFilteredData() {
             return currentData.filter(function(v) {
                 if (selectedCPA && v.cpa !== selectedCPA) return false;
-                if (selectedBPM && v.bpm !== selectedBPM) return false;
+                if (selectedBPM) {
+                    // Verificar se algum dos BPMs na via corresponde ao selecionado
+                    const viaBpms = v.bpm.split('/').map(function(b) {
+                        return b.trim();
+                    });
+                    if (!viaBpms.includes(selectedBPM)) return false;
+                }
                 return true;
             });
         }
         
         function updateFilters() {
+            // Obter todos os BPMs únicos das vias (para filtro)
+            const allBpms = [];
+            currentData.forEach(function(v) {
+                const bpms = v.bpm.split('/').map(function(b) {
+                    return b.trim();
+                });
+                bpms.forEach(function(bpm) {
+                    if (bpm && !allBpms.includes(bpm)) {
+                        allBpms.push(bpm);
+                    }
+                });
+            });
+            allBpms.sort();
+            
             const cpas = [...new Set(currentData.map(function(v) { return v.cpa; }))].sort();
-            const bpms = [...new Set(currentData.map(function(v) { return v.bpm; }))].sort();
             
             const cpaSelect = document.getElementById('cpa-filter');
             const bpmSelect = document.getElementById('bpm-filter');
             
             if (cpaSelect && bpmSelect) {
                 cpaSelect.innerHTML = '<option value="">Todos os CPAs</option>' + cpas.map(function(c) { return '<option value="' + c + '"' + (selectedCPA === c ? ' selected' : '') + '>' + c + '</option>'; }).join('');
-                bpmSelect.innerHTML = '<option value="">Todos os Batalhões</option>' + bpms.map(function(b) { return '<option value="' + b + '"' + (selectedBPM === b ? ' selected' : '') + '>' + b + '</option>'; }).join('');
+                bpmSelect.innerHTML = '<option value="">Todos os Batalhões</option>' + allBpms.map(function(b) { return '<option value="' + b + '"' + (selectedBPM === b ? ' selected' : '') + '>' + b + '</option>'; }).join('');
             }
             
             const filtered = getFilteredData();
@@ -214,21 +234,104 @@
             return true;
         }
         
+        function extractBPMsFromGlobalSheet(worksheet) {
+            const bpmSet = new Set();
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+            
+            // Procurar por colunas que contenham "BPM" ou "Batalhão" no cabeçalho
+            if (jsonData.length > 0) {
+                const headerRow = jsonData[0];
+                
+                // Encontrar índices de colunas que podem conter BPMs
+                for (let colIndex = 0; colIndex < headerRow.length; colIndex++) {
+                    const cellValue = String(headerRow[colIndex] || '').toLowerCase();
+                    if (cellValue.includes('bpm') || cellValue.includes('batalhão') || cellValue.includes('batalhao')) {
+                        // Extrair valores desta coluna
+                        for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
+                            const row = jsonData[rowIndex];
+                            if (row && row[colIndex]) {
+                                const bpmValue = String(row[colIndex]).trim();
+                                if (bpmValue) {
+                                    // Separar múltiplos BPMs por "/" ou outras delimitadores
+                                    const bpmParts = bpmValue.split(/[\/,;&]/);
+                                    bpmParts.forEach(function(part) {
+                                        const cleanedBPM = part.trim();
+                                        if (cleanedBPM && /BPM/i.test(cleanedBPM)) {
+                                            bpmSet.add(cleanedBPM.toUpperCase());
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Se não encontrou colunas específicas, procurar por padrões BPM em todas as células
+                if (bpmSet.size === 0) {
+                    for (let rowIndex = 0; rowIndex < jsonData.length; rowIndex++) {
+                        const row = jsonData[rowIndex];
+                        if (row) {
+                            for (let colIndex = 0; colIndex < row.length; colIndex++) {
+                                const cellValue = String(row[colIndex] || '');
+                                // Procurar padrões como "XX BPM" (ex: "16 BPM", "41 BPM")
+                                const bpmMatches = cellValue.match(/\b\d+\s*BPM\b/gi);
+                                if (bpmMatches) {
+                                    bpmMatches.forEach(function(match) {
+                                        bpmSet.add(match.toUpperCase().trim());
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return bpmSet;
+        }
+        
         function parseExcel(file) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    let sheetName = 'VIAS';
+                    
+                    // Processar aba VIAS
+                    let viasSheetName = 'VIAS';
                     if (!workbook.SheetNames.includes('VIAS')) {
-                        sheetName = workbook.SheetNames[0];
+                        viasSheetName = workbook.SheetNames[0];
                     }
-                    const worksheet = workbook.Sheets[sheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const viasWorksheet = workbook.Sheets[viasSheetName];
+                    const viasJsonData = XLSX.utils.sheet_to_json(viasWorksheet, { header: 1 });
+                    
+                    // Processar aba GLOBAL para extrair todos os BPMs
+                    let globalBPMsSet = new Set();
+                    const globalSheetName = workbook.SheetNames.find(name => 
+                        name.toLowerCase().includes('global') || 
+                        name.toLowerCase().includes('geral') ||
+                        name.toLowerCase().includes('total')
+                    );
+                    
+                    if (globalSheetName) {
+                        const globalWorksheet = workbook.Sheets[globalSheetName];
+                        globalBPMsSet = extractBPMsFromGlobalSheet(globalWorksheet);
+                    } else {
+                        // Se não encontrar aba Global, procurar em todas as abas
+                        workbook.SheetNames.forEach(function(sheetName) {
+                            if (sheetName !== viasSheetName) {
+                                const worksheet = workbook.Sheets[sheetName];
+                                const bpmSet = extractBPMsFromGlobalSheet(worksheet);
+                                bpmSet.forEach(function(bpm) {
+                                    globalBPMsSet.add(bpm);
+                                });
+                            }
+                        });
+                    }
+                    
+                    // Processar vias da aba VIAS
                     const parsedVias = [];
-                    for (let i = 1; i < jsonData.length; i++) {
-                        const row = jsonData[i];
+                    for (let i = 1; i < viasJsonData.length; i++) {
+                        const row = viasJsonData[i];
                         if (!row || !Array.isArray(row) || row.length === 0) continue;
                         mappings.forEach(function(map) {
                             const viaName = row[map.startCol];
@@ -249,7 +352,13 @@
                             }
                         });
                     }
-                    resolve({ vias: parsedVias, sheet: sheetName });
+                    
+                    resolve({ 
+                        vias: parsedVias, 
+                        globalBPMs: Array.from(globalBPMsSet),
+                        viasSheet: viasSheetName,
+                        globalSheet: globalSheetName || 'Não encontrada'
+                    });
                 };
                 reader.readAsArrayBuffer(file);
             });
@@ -259,26 +368,54 @@
             const totalVias = vias.length;
             const totalExtension = vias.reduce(function(s, v) { return s + (v.extensao || 0); }, 0);
             const cpas = new Set(vias.map(function(v) { return v.cpa; }));
-            const bpms = new Set(vias.map(function(v) { return v.bpm; }));
+            
+            // Usar os BPMs da aba Global (se disponíveis) ou calcular a partir das vias
+            let totalBPMs;
+            if (globalBPMs.size > 0) {
+                totalBPMs = globalBPMs.size;
+            } else {
+                // Fallback: calcular a partir das vias
+                const bpmSet = new Set();
+                vias.forEach(function(v) {
+                    const bpms = v.bpm.split('/').map(function(b) {
+                        return b.trim();
+                    });
+                    bpms.forEach(function(bpm) {
+                        if (bpm) bpmSet.add(bpm);
+                    });
+                });
+                totalBPMs = bpmSet.size;
+            }
+            
             const viasByCPA = {};
             vias.forEach(function(v) {
                 if (!viasByCPA[v.cpa]) viasByCPA[v.cpa] = [];
                 viasByCPA[v.cpa].push(v);
             });
+            
+            // Para o gráfico e tabela de BPMs, usamos os BPMs das vias (com divisão de extensão)
             const bpmMap = {};
             vias.forEach(function(v) {
-                if (!bpmMap[v.bpm]) bpmMap[v.bpm] = { count: 0, extension: 0 };
-                bpmMap[v.bpm].count++;
-                bpmMap[v.bpm].extension += (v.extensao || 0);
+                const bpms = v.bpm.split('/').map(function(b) {
+                    return b.trim();
+                });
+                bpms.forEach(function(bpm) {
+                    if (!bpmMap[bpm]) bpmMap[bpm] = { count: 0, extension: 0 };
+                    const extensionPerBpm = (v.extensao || 0) / bpms.length;
+                    bpmMap[bpm].count++;
+                    bpmMap[bpm].extension += extensionPerBpm;
+                });
             });
+            
             const bpmExtensions = Object.keys(bpmMap).map(function(k) {
                 return { bpm: k, count: bpmMap[k].count, extension: bpmMap[k].extension };
             }).sort(function(a, b) { return b.extension - a.extension; });
+            
             return {
                 totalVias: totalVias,
                 totalExtensionKm: (totalExtension / 1000).toFixed(2),
                 totalCPAs: cpas.size,
-                totalBPMs: bpms.size,
+                totalBPMs: totalBPMs,
                 viasByCPA: viasByCPA,
                 bpmExtensions: bpmExtensions
             };
@@ -302,10 +439,12 @@
                 const avg = viasArr.length > 0 ? Math.round(ext / viasArr.length) : 0;
                 cpaSummaryRows += '<tr><td><strong>' + cpa + '</strong></td><td class="right">' + viasArr.length + '</td><td class="right">' + (ext / 1000).toFixed(2) + '</td><td class="right">' + avg + '</td></tr>';
             });
+            
             let bpmSummaryRows = '';
             stats.bpmExtensions.forEach(function(item) {
                 bpmSummaryRows += '<tr><td><strong>' + item.bpm + '</strong></td><td class="right">' + item.count + '</td><td class="right">' + (item.extension / 1000).toFixed(2) + '</td></tr>';
             });
+            
             let viaSections = '';
             Object.keys(stats.viasByCPA).sort().forEach(function(cpa) {
                 const viasArr = stats.viasByCPA[cpa];
@@ -391,7 +530,15 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }
+                        plugins: { 
+                            legend: { 
+                                position: 'right', 
+                                labels: { 
+                                    boxWidth: 12, 
+                                    font: { size: 11 }
+                                } 
+                            } 
+                        }
                     }
                 });
             }
@@ -408,14 +555,21 @@
             parseExcel(file).then(function(result) {
                 if (result.vias.length > 0) {
                     currentData = result.vias;
+                    globalBPMs = new Set(result.globalBPMs);
                     selectedCPA = '';
                     selectedBPM = '';
-                    showInfo('Planilha importada com sucesso! ' + result.vias.length + ' vias encontradas na aba "' + result.sheet + '".');
+                    
+                    let infoMsg = 'Planilha importada com sucesso! ' + result.vias.length + ' vias encontradas na aba "' + result.viasSheet + '".';
+                    if (result.globalBPMs.length > 0) {
+                        infoMsg += ' ' + result.globalBPMs.length + ' BPMs identificados na aba "' + result.globalSheet + '".';
+                    }
+                    showInfo(infoMsg);
+                    
                     document.getElementById('report-date').textContent = 'Atualizado em: ' + new Date().toLocaleString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                     renderReport(currentData);
                     updateFilters();
                 } else {
-                    showInfo('Nenhum registro valido encontrado. Verifique a estrutura da planilha.');
+                    showInfo('Nenhum registro válido encontrado. Verifique a estrutura da planilha.');
                 }
             });
         }
